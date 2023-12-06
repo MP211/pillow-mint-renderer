@@ -55,7 +55,6 @@ class Renderer {
   `;
 
   // implementation hooks
-  
   onSetup           = () => Promise.resolve();
   onAnimationFrame  = ( model, frame, time, dTime, dRotation ) => {
     return Promise.resolve( model );
@@ -63,6 +62,7 @@ class Renderer {
   onComplete        = ( path ) => {};
 
   constructor( meshAssetPath, outputAssetPath, textureSources, h, w, options = {} ) {
+
     const opts = Object.assign({
       color:      0x000000, // pillow
       fps:        30, 
@@ -270,7 +270,7 @@ class Renderer {
                   vertexShader:   this.#NON_SQUARE_VS,
                   fragmentShader: this.#NON_SQUARE_FS,
                 });
-                
+
                 // render to target and rip texture
                 const s2 = new THREE.Scene();
                   s2.background = new THREE.Color( this.#color );
@@ -322,7 +322,7 @@ class Renderer {
           const tex = ( child.material.name in textures ) ? 
             textures[ child.material.name ] : null;
           if ( tex ) {
-            tex.flipY 		      = false;
+            tex.flipY           = false;
             tex.colorSpace      = THREE.SRGBColorSpace;
             tex.generateMipmaps = true;
             if ( !isPowerOfTwo(tex.image.height) || !isPowerOfTwo(tex.image.width) ) {
