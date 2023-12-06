@@ -7,5 +7,15 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "gifencoder": "^2.0.1",
+    "node-canvas-webgl": "^0.3.0",
+    "node-three-gltf": "^1.4.0",
+    "three": "^0.158.0",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "commander": "^11.1.0"
+  }
 }
