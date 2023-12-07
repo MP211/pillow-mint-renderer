@@ -28,7 +28,7 @@ const renderer = new Renderer(
   256, 256,
   {
     duration: 5,
-    quality:  2,
+    quality:  1,
     verbose:  options.debug,
     color:    0x000000,
   }
