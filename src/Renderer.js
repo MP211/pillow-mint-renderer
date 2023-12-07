@@ -1,6 +1,3 @@
-const {
-  isSquareEnough, isPowerOfTwo
-}                 = require('./util.js');
 const THREE       = require( 'three' );
 const {  
   GLTFLoader, TextureLoader 
@@ -10,6 +7,10 @@ const {
 }                 = require( 'node-canvas-webgl' );
 const fs          = require( 'fs' );
 const GIFEncoder  = require( 'gifencoder' );
+const {
+  isSquareEnough, isPowerOfTwo
+}                 = require('./util.js');
+
 
 class Renderer {
   #camera;
@@ -64,7 +65,7 @@ class Renderer {
   constructor( meshAssetPath, outputAssetPath, textureSources, h, w, options = {} ) {
 
     const opts = Object.assign({
-      color:      0x000000, // pillow
+      color:      0x000000, // pillow base color
       fps:        30, 
       duration:   0,        // animation, seconds
       verbose:    false,
@@ -73,7 +74,7 @@ class Renderer {
       },
       options
     );
-
+    
     this.#quality     = opts.quality;
     this.#verbose     = opts.verbose;
     this.#sources     = textureSources || {};
@@ -87,40 +88,31 @@ class Renderer {
     this.#color       = opts.color;
     this.#background  = new THREE.Color( 0x111111 );
 
-    this.#log( 'setting up graph' );
-
-    this.#canvas    = createCanvas( w, h, { alpha: true } );
-    this.#renderer  = new THREE.WebGLRenderer({ canvas: this.#canvas, antialias: true });
-    this.#renderer.setPixelRatio( 1 );
-    this.#renderer.setSize( w, h );
-    this.#scene     = new THREE.Scene();
-    this.#scene.background = this.#background;
-
-    this.#log( 'setting up serialization' );
-
-    this.#stream    = fs.createWriteStream( this.#output );
-    this.#stream.on( 'finish', () => {
-      this.#stream.end();
-      this.onComplete( this.#output );
-    });
-    this.#encoder   = new GIFEncoder( w, h );
-    this.#encoder.createReadStream().pipe( this.#stream );
-
-    this.#log( 'caching animation parameters' );
-
+    this.#log( 'caching animation values' );
     this.#frames        = this.#duration == 0 ? 1 : this.#fps * this.#duration;
     this.#deltaRotation = ( 360 / this.#frames ) * ( Math.PI / 180 ); 
     this.#deltaTime     = ( 1 / this.#fps ) * 1000;
 
-    this.#log( 'creating default camera' );
+    this.#log( 'instancing graph elements' );
+    this.#canvas    = createCanvas( w, h, { alpha: true } );
+    this.#renderer  = new THREE.WebGLRenderer({ canvas: this.#canvas, antialias: true });
+      this.#renderer.setPixelRatio( 1 );
+      this.#renderer.setSize( w, h );
+    this.#scene     = new THREE.Scene();
+      this.#scene.background = this.#background;
+    this.#camera    = new THREE.PerspectiveCamera( 60, w / h, 0.1, 1000 );
 
-    this.#camera = new THREE.PerspectiveCamera( 60, w / h, 0.1, 1000 );
-
-    this.#log( 'configuring encoder' );
-
-    this.#encoder.setRepeat( this.#duration == 0 ? -1 : 0 ); // -1 (don't repeat)
-    this.#encoder.setDelay( 30 );
-    this.#encoder.setQuality( this.#quality );
+    this.#log( 'configuring serialization' );
+    this.#stream  = fs.createWriteStream( this.#output );
+      this.#stream.on( 'finish', () => {
+        this.#stream.end();
+        this.onComplete( this.#output );
+      });
+    this.#encoder = new GIFEncoder( w, h );
+      this.#encoder.createReadStream().pipe( this.#stream );
+      this.#encoder.setRepeat( this.#duration == 0 ? -1 : 0 ); // -1 (don't repeat)
+      this.#encoder.setDelay( 30 );
+      this.#encoder.setQuality( this.#quality );
 
     this.#log( 'ready' );
   }
@@ -185,24 +177,25 @@ class Renderer {
   start() {
     this.#load( this.#mesh )
       .then( async () => { 
-        this.#log( 'adding default lights to scene' );
-
+        this.#log( 'creating default lights' );
         const ambo  = new THREE.AmbientLight(0xCFE2F3, 1.5);
         const spot  = new THREE.DirectionalLight(0xFFFFFF, 2.5);
-              spot.target.position.set( ...this.model.position );
+          spot.target.position.set( ...this.model.position );
+
         this.#scene.add(ambo);
         this.#scene.add(spot);
         this.#scene.add(spot.target);
 
         this.#log( 'setup' );
-
         ( await this.onSetup() );
+
         this.#scene.add( this.#model );
       })
       .then( async () => {
         if ( Object.keys( this.#sources ).length === 0 )
           return Promise.resolve(); 
-        await this.#texture();
+
+        ( await this.#texture() );
       })
       .then( async () => { 
         ( await this.#render() );
@@ -249,7 +242,6 @@ class Renderer {
                   return resolve({ 'mat': mat, 'tex': tex });
                 }
                 this.#log( `compositing non-square target` );
-
                 tex.minFilter = THREE.LinearFilter;
                 
                 // derive scale factor and wh ratios
@@ -343,21 +335,20 @@ class Renderer {
   #render() {
     return new Promise( async ( resolve, reject ) => {
       this.#log( 'rendering' );
-
       this.#encoder.start();
   
       for (let frame = 1; frame <= this.#frames; frame++) {
         this.#model = await this.onAnimationFrame( 
           this.#model, frame, this.#deltaTime * frame, this.#deltaTime, this.#deltaRotation 
           );
+
         this.#renderer.render( this.#scene, this.#camera );
         this.#encoder.addFrame( this.#canvas.__ctx__ );
 
         this.#log( `frame ${frame}/${this.#frames}` );
       }
-  
-      this.#log( 'compiling' );
 
+      this.#log( 'compiling' );
       this.#encoder.finish();
 
       resolve();
@@ -366,7 +357,6 @@ class Renderer {
 
   async #load( meshAssetPath ) {
     this.#log( 'loading' );
-
     return new Promise(( resolve, reject ) => {
       ( new GLTFLoader() ).load( meshAssetPath, 
         (gltf) => {
