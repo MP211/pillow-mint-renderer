@@ -210,9 +210,8 @@ class Renderer {
 
   async #texture() {
     this.#log( 'texturing' );
-
-    // auto-detect reused tex uris and set refs
     if ( this.#optimize === true ) {
+      // auto-detect reused tex uris and substitute with refs
       Object.keys( this.#sources ).reduce(( o, mat ) => {
         const uri = this.#sources[ mat ];
         if ( Object.keys(o).includes( uri ) ) {
@@ -233,50 +232,18 @@ class Renderer {
             let uri = this.#sources[ mat ].trim();
             this.#log( `material ${mat} -> ${uri}` );
 
-            // persist refs to follow or load unique
-            if ( uri.startsWith('ref:') ) {
+            // persist refs or load unique
+            if ( this.#optimize === true && uri.startsWith('ref:') ) {
               resolve({ 'mat': mat, 'tex': uri });
             } else {
-              ( new TextureLoader() ).load( uri, ( tex ) => {
-                if ( isSquareEnough( tex.image.width, tex.image.height, (v) => v > 0.9 ) ) {
-                  return resolve({ 'mat': mat, 'tex': tex });
+              ( new TextureLoader() ).load( uri, ( t ) => {
+                if ( isSquareEnough( t.image.width, t.image.height, (v) => v > 0.9 ) ) {
+                  resolve({ 'mat': mat, 'tex': t });
+                } else {
+                  const t2 = this.#composite( t );
+                  
+                  resolve({ 'mat': mat, 'tex': t2 });
                 }
-                this.#log( `compositing non-square target` );
-                tex.minFilter = THREE.LinearFilter;
-                
-                // derive scale factor and wh ratios
-                const tW  = tex.image.width;
-                const tH  = tex.image.height;
-                const mL  = Math.max( tW, tH );
-                const wR  = Math.min( mL, tW ) / Math.max( mL, tW );
-                const hR  = Math.min( mL, tH ) / Math.max( mL, tH );
-                const sF  = 1.0 / Math.max( wR, hR );
-
-                // shader to comp to size and orientation
-                const sM = new THREE.ShaderMaterial({
-                  uniforms: {
-                    u_fg: { value: tex  },
-                    u_sf: { value: sF   }
-                  },
-                  vertexShader:   this.#NON_SQUARE_VS,
-                  fragmentShader: this.#NON_SQUARE_FS,
-                });
-
-                // render to target and rip texture
-                const s2 = new THREE.Scene();
-                  s2.background = new THREE.Color( this.#color );
-                const oC = new THREE.OrthographicCamera( -1, 1, 1, -1, 0, 1 );
-                const rT = new THREE.WebGLRenderTarget( mL, mL );
-                const pG = new THREE.PlaneGeometry( 2 * wR, 2 * hR );
-                const m2 = new THREE.Mesh( pG, sM );
-                  s2.add(m2);
-                this.#renderer.setRenderTarget( rT );
-                this.#renderer.render( s2, oC );
-                const t2 = rT.texture;
-                  pG.dispose();
-                this.#renderer.setRenderTarget( null );
-
-                resolve({ 'mat': mat, 'tex': t2 });
               },
               null,   // (progress not currently supported)
               reject
@@ -293,8 +260,8 @@ class Renderer {
     const textures = ( await Promise.all( loaders ) ).reduce( 
       ( o, map ) => {
         let tex = map['tex'];
-        // assign refs to loaded mats when applicable
-        if ( !( tex !== null && typeof tex === 'object' ) ) {
+        // follow refs to previously loaded mats when applicable
+        if ( this.#optimize === true && !( tex !== null && typeof tex === 'object' ) ) {
           tex = o[ tex.replace(/^(ref:)(\w+)/gm, "$2") ];
         }
         o[ map['mat'] ] = tex;
@@ -305,21 +272,21 @@ class Renderer {
 
     let n = Object.keys( textures ).length;
     if ( n === 0 )
-      return Promise.resolve(); 
+      return Promise.resolve();
 
     return new Promise(( resolve, reject ) => {
       this.#model.traverse(child => {
         if ( child.material != undefined ) {
-          const tex = ( child.material.name in textures ) ? 
+          const t = ( child.material.name in textures ) ? 
             textures[ child.material.name ] : null;
-          if ( tex ) {
-            tex.flipY           = false;
-            tex.colorSpace      = THREE.SRGBColorSpace;
-            tex.generateMipmaps = true;
-            if ( !isPowerOfTwo(tex.image.height) || !isPowerOfTwo(tex.image.width) ) {
-              tex.minFilter = THREE.LinearFilter;
+          if ( t ) {
+            t.flipY           = false;
+            t.colorSpace      = THREE.SRGBColorSpace;
+            t.generateMipmaps = true;
+            if ( !isPowerOfTwo(t.image.height) || !isPowerOfTwo(t.image.width) ) {
+              t.minFilter = THREE.LinearFilter;
             }
-            child.material.map = tex;
+            child.material.map = t;
             n--;
           }
         }
@@ -371,6 +338,45 @@ class Renderer {
     });
   }
 
+  #composite( t ) {
+    this.#log( `compositing non-square target` );
+    t.minFilter = THREE.LinearFilter;
+    
+    // derive scale factor and wh ratios
+    const tW  = t.image.width;
+    const tH  = t.image.height;
+    const mL  = Math.max( tW, tH );
+    const wR  = Math.min( mL, tW ) / Math.max( mL, tW );
+    const hR  = Math.min( mL, tH ) / Math.max( mL, tH );
+    const sF  = 1.0 / Math.max( wR, hR );
+
+    // shader to comp to size and position
+    const sM = new THREE.ShaderMaterial({
+      uniforms: {
+        u_fg: { value: t  },
+        u_sf: { value: sF }
+      },
+      vertexShader:   this.#NON_SQUARE_VS,
+      fragmentShader: this.#NON_SQUARE_FS,
+    });
+
+    // render to target and rip texture
+    const s2 = new THREE.Scene();
+      s2.background = new THREE.Color( this.#color );
+    const oC = new THREE.OrthographicCamera( -1, 1, 1, -1, 0, 1 );
+    const rT = new THREE.WebGLRenderTarget( mL, mL );
+    const pG = new THREE.PlaneGeometry( 2 * wR, 2 * hR );
+    const m2 = new THREE.Mesh( pG, sM );
+      s2.add(m2);
+
+    this.#renderer.setRenderTarget( rT );
+    this.#renderer.render( s2, oC );
+    const t2 = rT.texture;
+      pG.dispose();
+    this.#renderer.setRenderTarget( null );
+
+    return t2;
+  }
 }
 
 module.exports = Renderer
