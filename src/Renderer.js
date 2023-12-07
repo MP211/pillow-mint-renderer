@@ -115,7 +115,6 @@ class Renderer {
     this.#log( 'creating default camera' );
 
     this.#camera = new THREE.PerspectiveCamera( 60, w / h, 0.1, 1000 );
-    this.#camera.position.set( 0, 0, 0 );
 
     this.#log( 'configuring encoder' );
 
