@@ -166,11 +166,12 @@ class Renderer {
     this.#load( this.#mesh )
       .then( async () => { 
         this.#log( 'creating default lights' );
-        const ambo  = new THREE.AmbientLight(0xCFE2F3, 1.5);
-        const spot  = new THREE.DirectionalLight(0xFFFFFF, 2.5);
+        const hemi  = new THREE.HemisphereLight( 0xffffff, 0xffffff, 1.75 ); 
+          hemi.position.set( 0.0, 1.75, 0.0 )
+        const spot  = new THREE.DirectionalLight( 0xFFFFFF, 1.1 );
           spot.target.position.set( ...this.model.position );
 
-        this.#scene.add(ambo);
+        this.#scene.add(hemi);
         this.#scene.add(spot);
         this.#scene.add(spot.target);
 
@@ -295,7 +296,7 @@ class Renderer {
         console.time('elapsed');
 
       const encoder = new GIFEncoder();
-      
+
       for (let frame = 1; frame <= this.#frames; frame++) {
         this.#model = await this.onAnimationFrame( 
           this.#model, frame, this.#deltaTime * frame, this.#deltaTime, this.#deltaRotation 
