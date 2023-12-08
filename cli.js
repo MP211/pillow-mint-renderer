@@ -25,10 +25,11 @@ const renderer = new Renderer(
     'Front':  options.front, 
     'Back':   options.back,
   },
-  256, 256,
+  1024, 1024,
   {
+    fps:      30,
     duration: 5,
-    quality:  1,
+    quality:  'rgb565',
     verbose:  options.debug,
     color:    0x000000,
   }

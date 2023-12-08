@@ -6,7 +6,9 @@ const {
   createCanvas
 }                 = require( 'node-canvas-webgl' );
 const fs          = require( 'fs' );
-const GIFEncoder  = require( 'gifencoder' );
+const { 
+  GIFEncoder, quantize, applyPalette 
+}                 = require( 'gifenc' );
 const {
   isSquareEnough, isPowerOfTwo
 }                 = require('./util.js');
@@ -18,8 +20,6 @@ class Renderer {
   #canvas;
   #scene;
   #model;
-  #encoder;
-  #stream;  
   #frames;
   #deltaRotation; // 360d (radians)
   #deltaTime;
@@ -69,7 +69,7 @@ class Renderer {
       fps:        30, 
       duration:   0,        // animation, seconds
       verbose:    false,
-      quality:    2,        // 1->10, best->fastest
+      quality:    'rgb565', // rgb565 (best, slower) rgb444 (faster) rgb4444 (faster w/ alpha)
       optimize:   false,  
       },
       options
@@ -89,7 +89,7 @@ class Renderer {
     this.#background  = new THREE.Color( 0x111111 );
 
     this.#log( 'caching animation values' );
-    this.#frames        = this.#duration == 0 ? 1 : this.#fps * this.#duration;
+    this.#frames        = this.#duration == 0 ? 1 : Math.ceil( this.#fps * this.#duration );
     this.#deltaRotation = ( 360 / this.#frames ) * ( Math.PI / 180 ); 
     this.#deltaTime     = ( 1 / this.#fps ) * 1000;
 
@@ -101,18 +101,6 @@ class Renderer {
     this.#scene     = new THREE.Scene();
       this.#scene.background = this.#background;
     this.#camera    = new THREE.PerspectiveCamera( 60, w / h, 0.1, 1000 );
-
-    this.#log( 'configuring serialization' );
-    this.#stream  = fs.createWriteStream( this.#output );
-      this.#stream.on( 'finish', () => {
-        this.#stream.end();
-        this.onComplete( this.#output );
-      });
-    this.#encoder = new GIFEncoder( w, h );
-      this.#encoder.createReadStream().pipe( this.#stream );
-      this.#encoder.setRepeat( this.#duration == 0 ? -1 : 0 ); // -1 (don't repeat)
-      this.#encoder.setDelay( 30 );
-      this.#encoder.setQuality( this.#quality );
 
     this.#log( 'ready' );
   }
@@ -302,21 +290,37 @@ class Renderer {
   #render() {
     return new Promise( async ( resolve, reject ) => {
       this.#log( 'rendering' );
-      this.#encoder.start();
-  
+
+      if ( this.#verbose === true )
+        console.time('elapsed');
+
+      const encoder = new GIFEncoder();
+      
       for (let frame = 1; frame <= this.#frames; frame++) {
         this.#model = await this.onAnimationFrame( 
           this.#model, frame, this.#deltaTime * frame, this.#deltaTime, this.#deltaRotation 
           );
 
         this.#renderer.render( this.#scene, this.#camera );
-        this.#encoder.addFrame( this.#canvas.__ctx__ );
 
         this.#log( `frame ${frame}/${this.#frames}` );
+
+        const { data, width, height } = this.#canvas.__ctx__.getImageData( 0, 0, this.#w, this.#h );
+        
+        // quantize and get indexed bmp
+        const palette   = quantize( data, 256, { format: this.#quality } );
+        const index     = applyPalette( data, palette );
+        
+        encoder.writeFrame(index, width, height, { palette, repeat: 0, delay: this.#deltaTime });
       }
 
       this.#log( 'compiling' );
-      this.#encoder.finish();
+      encoder.finish();
+      fs.writeFileSync( this.#output, encoder.bytes() );
+      this.onComplete( this.#output );
+
+      if ( this.#verbose === true )
+        console.timeEnd('elapsed')
 
       resolve();
     });

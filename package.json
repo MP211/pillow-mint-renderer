@@ -9,7 +9,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "gifencoder": "^2.0.1",
+    "gifenc": "^1.0.3",
     "node-canvas-webgl": "^0.3.0",
     "node-three-gltf": "^1.4.0",
     "three": "^0.158.0",
