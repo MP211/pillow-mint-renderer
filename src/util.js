@@ -1,3 +1,6 @@
+
+const { floydSteinberg } = require( './dither.js' );
+
 const scaleToRange = ( v, vMin, vMax, rMin = 0, rMax = 1 ) => {
   return (((v - vMin) / (vMax - vMin)) * (rMax - rMin)) + rMin;
 };
@@ -15,6 +18,10 @@ const isSquareEnough = ( w, h, t = (v) => v > 0.5 ) => {
     );
 };
 
+const dither = ( pixels, width, height, palette ) => {
+  return floydSteinberg( pixels, width, height, palette );
+};
+
 module.exports = {
-  scaleToRange, isPowerOfTwo, isSquareEnough
+  scaleToRange, isPowerOfTwo, isSquareEnough, dither
 }

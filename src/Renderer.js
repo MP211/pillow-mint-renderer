@@ -6,13 +6,12 @@ const {
   createCanvas
 }                 = require( 'node-canvas-webgl' );
 const fs          = require( 'fs' );
-// const { 
-//   GIFEncoder, quantize, applyPalette 
-// }                 = require( 'gifenc' );
+const { 
+  GIFEncoder, quantize, applyPalette 
+}                 = require( 'gifenc' );
 const {
-  isSquareEnough, isPowerOfTwo
+  isSquareEnough, isPowerOfTwo, dither
 }                 = require( './util.js' );
-const UPNG        = require( 'upng-js' );
 
 class Renderer {
   #camera;
@@ -35,6 +34,7 @@ class Renderer {
   #quality;
   #color;
   #background;
+  #dither;
 
   #NON_SQUARE_VS = `
   varying vec2 v_uv;
@@ -70,7 +70,8 @@ class Renderer {
       duration:   0,        // animation, seconds
       verbose:    false,
       quality:    'rgb565', // rgb565 (best, slower) rgb444 (faster) rgb4444 (faster w/ alpha)
-      optimize:   false,  
+      optimize:   false,
+      dither:     true,
       },
       options
     );
@@ -87,6 +88,7 @@ class Renderer {
     this.#optimize    = opts.optimize;
     this.#color       = opts.color;
     this.#background  = new THREE.Color( 0x111111 );
+    this.#dither      = opts.dither;
 
     this.#log( 'caching animation values' );
     this.#frames        = this.#duration == 0 ? 1 : Math.ceil( this.#fps * this.#duration );
@@ -107,7 +109,7 @@ class Renderer {
 
   set optimize(v) {
     this.#optimize = v;
-  }  
+  }
   set camera(v) {
     this.#camera = v;
   }
@@ -153,6 +155,12 @@ class Renderer {
   get background() {
     return this.#background;
   }
+  set dither(v) {
+    this.#dither = v;
+  }
+  get dither() {
+    return this.#dither;
+  }  
 
   purge() {
     // (remove all lights)
@@ -288,6 +296,47 @@ class Renderer {
     })
   }
 
+  #getPalette() {
+    const sample = ( numColors, yRadians ) => {
+      const oY = this.#model.rotation.y;
+
+      this.#model.rotation.y = yRadians;
+      this.#renderer.render( this.#scene, this.#camera );
+
+      const { data }  = this.#canvas.__ctx__.getImageData( 0, 0, this.#w, this.#h );
+      const palette   = quantize( data, numColors, { format: this.#quality } );
+
+      this.#model.rotation.y = oY; // (revert)
+
+      return palette;
+    };
+
+    // color counts per face based on dither enabled; values are arbitrary
+    const fC = this.#dither ? 32  : 192;
+    const bC = this.#dither ? 16   : 64;
+
+    // sample at origin then at 180, merge as a global palette (combined max 256)
+    const fP = sample( fC, 0 );
+    const bP = sample( bC, 180 * Math.PI/180 );
+
+    // control (larger) & test (smaller) palettes
+    const cP = ( fP.length >= bP.length ? fP : bP );
+    const tP = ( fP.length <  bP.length ? fP : bP );
+    // lookup
+    const tb = cP.reduce(( o, v ) => {
+      o[ v.join( '-' ) ] = v;
+      return o;
+    }, {});
+    // concat, no dupe
+    tP.forEach(( v ) => {
+      const k = v.join( '-' );
+      if ( !(k in tb) )
+        tb[ k ] = v;
+    });
+
+    return Object.values(tb);
+  }
+
   #render() {
     return new Promise( async ( resolve, reject ) => {
       this.#log( 'rendering' );
@@ -295,37 +344,33 @@ class Renderer {
       if ( this.#verbose === true )
         console.time('elapsed');
 
-      //const encoder = new GIFEncoder();
-      const fBuffers = new Array( this.#frames );
+      this.#log( `building palette` );
+      const palette = this.#getPalette();
 
-      for (let frame = 1; frame <= this.#frames; frame++) {
+      const encoder = new GIFEncoder();
+      
+      for (let frame = 0; frame < this.#frames; frame++) {
+        this.#renderer.render( this.#scene, this.#camera );
+
+        this.#log( `${this.#dither ? 'dithering' : 'sampling'} frame ${frame + 1}/${this.#frames}` );
+        const { 
+          data, width, height 
+        } = this.#canvas.__ctx__.getImageData( 0, 0, this.#w, this.#h );
+        const pass  = this.#dither ? dither( data, width, height, palette ) : data;
+        const index = applyPalette( pass, palette );
+        encoder.writeFrame( 
+          index, width, height, { palette, repeat: 0, delay: this.#deltaTime }
+          );
+
         this.#model = await this.onAnimationFrame( 
           this.#model, frame, this.#deltaTime * frame, this.#deltaTime, this.#deltaRotation 
           );
-
-        this.#renderer.render( this.#scene, this.#camera );
-
-        this.#log( `sampling frame ${frame}/${this.#frames}` );
-
-        const { data, width, height } = this.#canvas.__ctx__.getImageData( 0, 0, this.#w, this.#h );
-        
-        // quantize to palette and get indexed bmp data
-        // const palette   = quantize( data, 256, { format: this.#quality } );
-        // const index     = applyPalette( data, palette );        
-        // encoder.writeFrame(index, width, height, { palette, repeat: 0, delay: this.#deltaTime });
-        // arraybuffer as frames
-        fBuffers.push( data.buffer );
       }
+      this.#log( 'finishing up' );
 
-      this.#log( 'compiling' );
-      //encoder.finish();
-      const delays = new Array( this.#frames );
-        delays.fill( this.#deltaTime );
-      const buffer = UPNG.encode( fBuffers, this.#w, this.#h, 0, delays );
+      encoder.finish();
 
-      this.#log( 'serializing' );
-      //fs.writeFileSync( this.#output, encoder.bytes() );
-      fs.writeFileSync( `${this.#output}`, Buffer.from( buffer ) );
+      fs.writeFileSync( this.#output, encoder.bytes() );
 
       this.onComplete( this.#output );
 
@@ -393,4 +438,4 @@ class Renderer {
   }
 }
 
-module.exports = Renderer
+module.exports = Renderer;

@@ -20,7 +20,7 @@ const options = commander.opts();
 
 const renderer = new Renderer(
   './assets/Pillow_highpoly.gltf', 
-  path.resolve( `./output/${uuidv4()}.png` ),
+  path.resolve( `./output/${uuidv4()}.gif` ),
   {
     'Front':  options.front, 
     'Back':   options.back,
@@ -32,6 +32,7 @@ const renderer = new Renderer(
     quality:  'rgb565',
     verbose:  options.debug,
     color:    0x000000,
+    dither:   true,
   }
   );
   renderer.onSetup = () => {
