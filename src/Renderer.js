@@ -6,13 +6,13 @@ const {
   createCanvas
 }                 = require( 'node-canvas-webgl' );
 const fs          = require( 'fs' );
-const { 
-  GIFEncoder, quantize, applyPalette 
-}                 = require( 'gifenc' );
+// const { 
+//   GIFEncoder, quantize, applyPalette 
+// }                 = require( 'gifenc' );
 const {
   isSquareEnough, isPowerOfTwo
-}                 = require('./util.js');
-
+}                 = require( './util.js' );
+const UPNG        = require( 'upng-js' );
 
 class Renderer {
   #camera;
@@ -295,7 +295,8 @@ class Renderer {
       if ( this.#verbose === true )
         console.time('elapsed');
 
-      const encoder = new GIFEncoder();
+      //const encoder = new GIFEncoder();
+      const fBuffers = new Array( this.#frames );
 
       for (let frame = 1; frame <= this.#frames; frame++) {
         this.#model = await this.onAnimationFrame( 
@@ -304,20 +305,28 @@ class Renderer {
 
         this.#renderer.render( this.#scene, this.#camera );
 
-        this.#log( `frame ${frame}/${this.#frames}` );
+        this.#log( `sampling frame ${frame}/${this.#frames}` );
 
         const { data, width, height } = this.#canvas.__ctx__.getImageData( 0, 0, this.#w, this.#h );
         
-        // quantize and get indexed bmp
-        const palette   = quantize( data, 256, { format: this.#quality } );
-        const index     = applyPalette( data, palette );
-        
-        encoder.writeFrame(index, width, height, { palette, repeat: 0, delay: this.#deltaTime });
+        // quantize to palette and get indexed bmp data
+        // const palette   = quantize( data, 256, { format: this.#quality } );
+        // const index     = applyPalette( data, palette );        
+        // encoder.writeFrame(index, width, height, { palette, repeat: 0, delay: this.#deltaTime });
+        // arraybuffer as frames
+        fBuffers.push( data.buffer );
       }
 
       this.#log( 'compiling' );
-      encoder.finish();
-      fs.writeFileSync( this.#output, encoder.bytes() );
+      //encoder.finish();
+      const delays = new Array( this.#frames );
+        delays.fill( this.#deltaTime );
+      const buffer = UPNG.encode( fBuffers, this.#w, this.#h, 0, delays );
+
+      this.#log( 'serializing' );
+      //fs.writeFileSync( this.#output, encoder.bytes() );
+      fs.writeFileSync( `${this.#output}`, Buffer.from( buffer ) );
+
       this.onComplete( this.#output );
 
       if ( this.#verbose === true )

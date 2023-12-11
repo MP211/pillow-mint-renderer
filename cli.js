@@ -20,14 +20,14 @@ const options = commander.opts();
 
 const renderer = new Renderer(
   './assets/Pillow_highpoly.gltf', 
-  path.resolve( `./output/${uuidv4()}.gif` ),
+  path.resolve( `./output/${uuidv4()}.png` ),
   {
     'Front':  options.front, 
     'Back':   options.back,
   },
   1024, 1024,
   {
-    fps:      30,
+    fps:      15,
     duration: 5,
     quality:  'rgb565',
     verbose:  options.debug,
