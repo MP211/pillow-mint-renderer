@@ -1,8 +1,8 @@
 
-// node cli.js -d -f 'https://lh3.googleusercontent.com/2WYIu_QWkFaH19qEC63V8wPX7OTlvIzJ0uQvTTzuZh2tpjIt48PPzQcsXHyF3EAAPaOHErUGg5KoilE9d75ZC7iqL-1JuKmTag=s250' -b 'https://lh3.googleusercontent.com/tYRga3Tjv-VN-4maTi3v-F4uiXZVc31UA3O4UgfRXSgbg1tMlmI55g9OOtq2fI2JBCGzF2j8BQ6Z-pQg0O9ST5l_rqRhzTiTQ90=s250'
-// node cli.js -d -f 'https://lh3.googleusercontent.com/JkcEkgNGyKnd5HlZYgF9tQB2oVl48Jz1G9gvpVcgxIVxGXB3IsfYP0vnyC8_IHeMOAd-Xe_NgNwBt-ZxyM8fpOQjvK9NVU_JaCE=s250' -b 'https://lh3.googleusercontent.com/tYRga3Tjv-VN-4maTi3v-F4uiXZVc31UA3O4UgfRXSgbg1tMlmI55g9OOtq2fI2JBCGzF2j8BQ6Z-pQg0O9ST5l_rqRhzTiTQ90=s250'
-// node cli.js -d -f 'https://lh3.googleusercontent.com/gAxNuvzWnZcZXHMIBrCrK-KxK-E2xiXjDDzCH0YVXjyznKtpJuZSNLRdDxXuHKVsmQ_qDrUt3ngAYxjEw2gwZpb6spEuPpL8IHV0=s250' -b 'https://lh3.googleusercontent.com/tYRga3Tjv-VN-4maTi3v-F4uiXZVc31UA3O4UgfRXSgbg1tMlmI55g9OOtq2fI2JBCGzF2j8BQ6Z-pQg0O9ST5l_rqRhzTiTQ90=s250'
-// node cli.js -d -f 'https://lh3.googleusercontent.com/29nCU6zR51d8dP6HmtvsIp6q94njEDkTuw6OreCr416ozC4cIO3m6RkLksFhl1-Q0xA1j9tdn-jweRMpwPa3Gk3KzOxiTIblsRo=s250' -b 'https://lh3.googleusercontent.com/tYRga3Tjv-VN-4maTi3v-F4uiXZVc31UA3O4UgfRXSgbg1tMlmI55g9OOtq2fI2JBCGzF2j8BQ6Z-pQg0O9ST5l_rqRhzTiTQ90=s250'
+// node cli.js -d -f 'https://lh3.googleusercontent.com/2WYIu_QWkFaH19qEC63V8wPX7OTlvIzJ0uQvTTzuZh2tpjIt48PPzQcsXHyF3EAAPaOHErUGg5KoilE9d75ZC7iqL-1JuKmTag=s250' -b 'https://sseance-public.s3.us-west-1.amazonaws.com/back.png'
+// node cli.js -d -f 'https://lh3.googleusercontent.com/JkcEkgNGyKnd5HlZYgF9tQB2oVl48Jz1G9gvpVcgxIVxGXB3IsfYP0vnyC8_IHeMOAd-Xe_NgNwBt-ZxyM8fpOQjvK9NVU_JaCE=s250' -b 'https://sseance-public.s3.us-west-1.amazonaws.com/back.png'
+// node cli.js -d -f 'https://lh3.googleusercontent.com/gAxNuvzWnZcZXHMIBrCrK-KxK-E2xiXjDDzCH0YVXjyznKtpJuZSNLRdDxXuHKVsmQ_qDrUt3ngAYxjEw2gwZpb6spEuPpL8IHV0=s250' -b 'https://sseance-public.s3.us-west-1.amazonaws.com/back.png'
+// node cli.js -d -f 'https://lh3.googleusercontent.com/29nCU6zR51d8dP6HmtvsIp6q94njEDkTuw6OreCr416ozC4cIO3m6RkLksFhl1-Q0xA1j9tdn-jweRMpwPa3Gk3KzOxiTIblsRo=s250' -b 'https://sseance-public.s3.us-west-1.amazonaws.com/back.png'
 
 const { TextureLoader } = require( 'node-three-gltf' );
 const commander         = require( 'commander' );
@@ -29,7 +29,7 @@ const renderer = new Renderer(
   {
     fps:      15,
     duration: 5,
-    quality:  'rgb565',
+    quality:  'rgb444',
     verbose:  options.debug,
     color:    0x000000,
     dither:   true,
