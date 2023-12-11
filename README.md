@@ -6,7 +6,7 @@ Time to process has the following (configurable) factors:
 
 - output dimensions
 - FPS
-- rotation time
+- animation duration
 - encoder quality
 - optional dithering
 - palette derivation (internal)
