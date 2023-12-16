@@ -27,16 +27,18 @@ const renderer = new Renderer(
   },
   1024, 1024,
   {
-    fps:      15,
-    duration: 5,
-    quality:  'rgb444',
-    verbose:  options.debug,
-    color:    0x000000,
-    dither:   true,
+    fps:        15,
+    duration:   5,
+    quality:    'rgb444',
+    verbose:    options.debug,
+    color:      0x000000,
+    dither:     true,
+    thumbnail:  true,
   }
   );
   renderer.onSetup = () => {
     renderer.camera.position.set( 0.0, 0.0, 0.6 );
+    renderer.model.rotation.set( 0.0, 0.0, 0.0 );
     renderer.model.position.set( 0.0, -0.2, 0.0 );
 
     ( new TextureLoader() ).load( './assets/bg-4.png', (t) => {

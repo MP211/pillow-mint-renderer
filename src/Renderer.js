@@ -35,6 +35,7 @@ class Renderer {
   #color;
   #background;
   #dither;
+  #thumbnail;
 
   #NON_SQUARE_VS = `
   varying vec2 v_uv;
@@ -72,6 +73,7 @@ class Renderer {
       quality:    'rgb565', // rgb565 (best, slower) rgb444 (faster) rgb4444 (faster w/ alpha)
       optimize:   false,
       dither:     true,
+      thumbnail:  true,
       },
       options
     );
@@ -89,6 +91,7 @@ class Renderer {
     this.#color       = opts.color;
     this.#background  = new THREE.Color( 0x111111 );
     this.#dither      = opts.dither;
+    this.#thumbnail   = opts.thumbnail;
 
     this.#log( 'caching animation values' );
     this.#frames        = this.#duration == 0 ? 1 : Math.ceil( this.#fps * this.#duration );
@@ -160,6 +163,12 @@ class Renderer {
   }
   get dither() {
     return this.#dither;
+  }
+  set thumbnail(v) {
+    this.#thumbnail = v;
+  }
+  get thumbnail() {
+    return this.#thumbnail;
   }  
 
   purge() {
@@ -297,16 +306,25 @@ class Renderer {
   }
 
   #getPalette() {
-    const sample = ( numColors, yRadians ) => {
-      const oY = this.#model.rotation.y;
+    const sample = ( numColors, v3Rotation = null, v3Position = null ) => {
+      const oR = this.#model.rotation;
+      const oP = this.#model.position;
 
-      this.#model.rotation.y = yRadians;
+      if ( v3Rotation )
+        this.#model.rotation.set( v3Rotation.x, v3Rotation.y, v3Rotation.z );
+      if ( v3Position )
+        this.#model.position.set( v3Position.x, v3Position.y, v3Position.z );
+
       this.#renderer.render( this.#scene, this.#camera );
 
       const { data }  = this.#canvas.__ctx__.getImageData( 0, 0, this.#w, this.#h );
       const palette   = quantize( data, numColors, { format: this.#quality } );
 
-      this.#model.rotation.y = oY; // (revert)
+      // (revert)
+      if ( v3Rotation )
+        this.#model.rotation.set( oR.x, oR.y, oR.z ); 
+      if ( v3Position )
+        this.#model.position.set( oP.x, oP.y, oP.z );
 
       return palette;
     };
@@ -315,9 +333,11 @@ class Renderer {
     const fC = this.#dither ? 32  : 192;
     const bC = this.#dither ? 16   : 64;
 
-    // sample at origin then at 180, merge as a global palette (combined max 256)
-    const fP = sample( fC, 0 );
-    const bP = sample( bC, 180 * Math.PI/180 );
+    // sample at origin then at y+180, merge as a global palette (combined max 256)
+    const fP = sample( fC );
+    const bP = sample( bC, new THREE.Vector3( 
+      0, this.#model.rotation.y + ( 180 * Math.PI/180 ), 0 
+      ) );
 
     // control (larger) & test (smaller) palettes
     const cP = ( fP.length >= bP.length ? fP : bP );
@@ -334,7 +354,56 @@ class Renderer {
         tb[ k ] = v;
     });
 
-    return Object.values(tb);
+    return Object.values( tb );
+  }
+
+  async #snapshot( palette, v3Rotation = null, v3Position = null ) {
+    const path = this.output.split('/');
+    const file = path.pop();
+    const name = file.split('.');
+      path.push( `${name.shift()}-t.${name.pop()}` );
+
+    return new Promise( ( resolve, reject ) => {
+      const oR = this.#model.rotation;
+      const oP = this.#model.position;
+
+      if ( v3Rotation )
+        this.#model.rotation.set( v3Rotation.x, v3Rotation.y, v3Rotation.z );
+      if ( v3Position )
+        this.#model.position.set( v3Position.x, v3Position.y, v3Position.z );
+
+      this.#renderer.render( this.#scene, this.#camera );
+
+      const encoder = new GIFEncoder();
+      
+      this.#encode( encoder, palette );
+        
+      encoder.finish();
+      
+      fs.writeFileSync( path.join( '/' ), encoder.bytes() );
+
+      if ( v3Rotation )
+        this.#model.rotation.set( oR.x, oR.y, oR.z ); 
+      if ( v3Position )
+        this.#model.position.set( oP.x, oP.y, oP.z );
+      
+      resolve();
+    });
+  }
+
+  #encode( encoder, palette ) {
+    const { 
+      data, width, height 
+    } = this.#canvas.__ctx__.getImageData( 0, 0, this.#w, this.#h );
+
+    const pass  = this.#dither ? dither( data, width, height, palette ) : data;
+    const index = applyPalette( pass, palette );
+    
+    encoder.writeFrame( 
+      index, width, height, { palette, repeat: 0, delay: this.#deltaTime }
+      );
+
+    return encoder;
   }
 
   #render() {
@@ -342,32 +411,32 @@ class Renderer {
       this.#log( 'rendering' );
 
       if ( this.#verbose === true )
-        console.time('elapsed');
+        console.time( 'elapsed' );
 
-      this.#log( `building palette` );
+      this.#log( 'building palette' );
       const palette = this.#getPalette();
 
+      if ( this.#thumbnail ) {
+        this.#log( 'saving snapshot' );
+        ( await this.#snapshot( 
+            palette, new THREE.Vector3( 0, this.#model.rotation.y + ( 180 * Math.PI/180 ), 0 ) 
+          ) );
+      }
+
       const encoder = new GIFEncoder();
-      
+
       for (let frame = 0; frame < this.#frames; frame++) {
         this.#renderer.render( this.#scene, this.#camera );
-
+        
         this.#log( `${this.#dither ? 'dithering' : 'sampling'} frame ${frame + 1}/${this.#frames}` );
-        const { 
-          data, width, height 
-        } = this.#canvas.__ctx__.getImageData( 0, 0, this.#w, this.#h );
-        const pass  = this.#dither ? dither( data, width, height, palette ) : data;
-        const index = applyPalette( pass, palette );
-        encoder.writeFrame( 
-          index, width, height, { palette, repeat: 0, delay: this.#deltaTime }
-          );
-
+        this.#encode( encoder, palette );
+        
         this.#model = await this.onAnimationFrame( 
           this.#model, frame, this.#deltaTime * frame, this.#deltaTime, this.#deltaRotation 
           );
       }
       this.#log( 'finishing up' );
-
+      
       encoder.finish();
 
       fs.writeFileSync( this.#output, encoder.bytes() );
@@ -375,7 +444,7 @@ class Renderer {
       this.onComplete( this.#output );
 
       if ( this.#verbose === true )
-        console.timeEnd('elapsed')
+        console.timeEnd( 'elapsed' );
 
       resolve();
     });
